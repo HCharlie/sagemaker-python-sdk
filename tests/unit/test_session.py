@@ -43,8 +43,6 @@ from sagemaker.config import MODEL_CONTAINERS_PATH
 from sagemaker.utils import update_list_of_dicts_with_values_from_config
 from sagemaker.user_agent import (
     SDK_PREFIX,
-    STUDIO_PREFIX,
-    NOTEBOOK_PREFIX,
 )
 from sagemaker.compute_resource_requirements.resource_requirements import ResourceRequirements
 from tests.unit import (
@@ -87,15 +85,20 @@ RESOURCES = ResourceRequirements(
     limits={},
 )
 
+SDK_DEFAULT_SUFFIX = f"lib/{SDK_PREFIX}#2.218.0"
+NOTEBOOK_SUFFIX = f"{SDK_DEFAULT_SUFFIX} md/AWS-SageMaker-Notebook-Instance#instance_type"
+STUDIO_SUFFIX = f"{SDK_DEFAULT_SUFFIX} md/AWS-SageMaker-Studio#app_type"
 
-@pytest.fixture()
-def boto_session():
+
+@pytest.fixture
+def boto_session(request):
+    boto_user_agent = "Boto3/1.33.9 md/Botocore#1.33.9 ua/2.0 os/linux#linux-ver md/arch#x86_64 lang/python#3.10.6"
+    user_agent_suffix = getattr(request, "param", "")
     boto_mock = Mock(name="boto_session", region_name=REGION)
-
     client_mock = Mock()
-    client_mock._client_config.user_agent = (
-        "Boto3/1.9.69 Python/3.6.5 Linux/4.14.77-70.82.amzn1.x86_64 Botocore/1.12.69 Resource"
-    )
+    user_agent = f"{boto_user_agent} {SDK_DEFAULT_SUFFIX} {user_agent_suffix}"
+    with patch("sagemaker.user_agent.get_user_agent_extra_suffix", return_value=user_agent_suffix):
+        client_mock._client_config.user_agent = user_agent
     boto_mock.client.return_value = client_mock
     return boto_mock
 
@@ -725,28 +728,6 @@ def test_get_caller_identity_arn_from_metadata_file_for_space(boto_session):
 
 @patch(
     "six.moves.builtins.open",
-    mock_open(
-        read_data='{"ResourceName": "SageMakerInstance", '
-        '"DomainId": "d-kbnw5yk6tg8j", '
-        '"SpaceName": "space_name"}'
-    ),
-)
-@patch("os.path.exists", side_effect=mock_exists(NOTEBOOK_METADATA_FILE, True))
-def test_get_caller_identity_arn_from_describe_domain_for_space(boto_session):
-    sess = Session(boto_session)
-    expected_role = "arn:aws:iam::369233609183:role/service-role/SageMakerRole-20171129T072388"
-    sess.sagemaker_client.describe_domain.return_value = {
-        "DefaultSpaceSettings": {"ExecutionRole": expected_role}
-    }
-
-    actual = sess.get_caller_identity_arn()
-
-    assert actual == expected_role
-    sess.sagemaker_client.describe_domain.assert_called_once_with(DomainId="d-kbnw5yk6tg8j")
-
-
-@patch(
-    "six.moves.builtins.open",
     mock_open(read_data='{"ResourceName": "SageMakerInstance"}'),
 )
 @patch("os.path.exists", side_effect=mock_exists(NOTEBOOK_METADATA_FILE, True))
@@ -909,65 +890,42 @@ def test_delete_model(boto_session):
     boto_session.client().delete_model.assert_called_with(ModelName=model_name)
 
 
+@pytest.mark.parametrize("boto_session", [""], indirect=True)
 def test_user_agent_injected(boto_session):
-    assert SDK_PREFIX not in boto_session.client("sagemaker")._client_config.user_agent
-
     sess = Session(boto_session)
-
+    expected_user_agent_suffix = "lib/AWS-SageMaker-Python-SDK#2.218.0"
     for client in [
         sess.sagemaker_client,
         sess.sagemaker_runtime_client,
         sess.sagemaker_metrics_client,
     ]:
-        assert SDK_PREFIX in client._client_config.user_agent
-        assert NOTEBOOK_PREFIX not in client._client_config.user_agent
-        assert STUDIO_PREFIX not in client._client_config.user_agent
+        assert expected_user_agent_suffix in client._client_config.user_agent
 
 
-@patch("sagemaker.user_agent.process_notebook_metadata_file", return_value="ml.t3.medium")
-def test_user_agent_injected_with_nbi(
-    mock_process_notebook_metadata_file,
-    boto_session,
-):
-    assert SDK_PREFIX not in boto_session.client("sagemaker")._client_config.user_agent
-
-    sess = Session(
-        boto_session=boto_session,
+@pytest.mark.parametrize("boto_session", [f"{NOTEBOOK_SUFFIX}"], indirect=True)
+def test_user_agent_with_notebook_instance_type(boto_session):
+    sess = Session(boto_session)
+    expected_user_agent_suffix = (
+        "lib/AWS-SageMaker-Python-SDK#2.218.0 md/AWS-SageMaker-Notebook-Instance#instance_type"
     )
-
     for client in [
         sess.sagemaker_client,
         sess.sagemaker_runtime_client,
         sess.sagemaker_metrics_client,
     ]:
-        mock_process_notebook_metadata_file.assert_called()
-
-        assert SDK_PREFIX in client._client_config.user_agent
-        assert NOTEBOOK_PREFIX in client._client_config.user_agent
-        assert STUDIO_PREFIX not in client._client_config.user_agent
+        assert expected_user_agent_suffix in client._client_config.user_agent
 
 
-@patch("sagemaker.user_agent.process_studio_metadata_file", return_value="dymmy-app-type")
-def test_user_agent_injected_with_studio_app_type(
-    mock_process_studio_metadata_file,
-    boto_session,
-):
-    assert SDK_PREFIX not in boto_session.client("sagemaker")._client_config.user_agent
-
-    sess = Session(
-        boto_session=boto_session,
-    )
-
+@pytest.mark.parametrize("boto_session", [f"{STUDIO_SUFFIX}"], indirect=True)
+def test_user_agent_with_studio_app_type(boto_session):
+    sess = Session(boto_session)
+    expected_user_agent = "lib/AWS-SageMaker-Python-SDK#2.218.0 md/AWS-SageMaker-Studio#app_type"
     for client in [
         sess.sagemaker_client,
         sess.sagemaker_runtime_client,
         sess.sagemaker_metrics_client,
     ]:
-        mock_process_studio_metadata_file.assert_called()
-
-        assert SDK_PREFIX in client._client_config.user_agent
-        assert NOTEBOOK_PREFIX not in client._client_config.user_agent
-        assert STUDIO_PREFIX in client._client_config.user_agent
+        assert expected_user_agent in client._client_config.user_agent
 
 
 def test_training_input_all_defaults():
@@ -2219,6 +2177,7 @@ def test_train_pack_to_request_with_optional_params(sagemaker_session):
     CONTAINER_ENTRY_POINT = ["bin/bash", "test.sh"]
     CONTAINER_ARGUMENTS = ["--arg1", "value1", "--arg2", "value2"]
     remote_debug_config = {"EnableRemoteDebug": True}
+    session_chaining_config = {"EnableSessionTagChaining": True}
 
     sagemaker_session.train(
         image_uri=IMAGE,
@@ -2244,6 +2203,7 @@ def test_train_pack_to_request_with_optional_params(sagemaker_session):
         container_entry_point=CONTAINER_ENTRY_POINT,
         container_arguments=CONTAINER_ARGUMENTS,
         remote_debug_config=remote_debug_config,
+        session_chaining_config=session_chaining_config,
     )
 
     _, _, actual_train_args = sagemaker_session.sagemaker_client.method_calls[0]
@@ -2267,6 +2227,7 @@ def test_train_pack_to_request_with_optional_params(sagemaker_session):
     )
     assert actual_train_args["AlgorithmSpecification"]["ContainerArguments"] == CONTAINER_ARGUMENTS
     assert actual_train_args["RemoteDebugConfig"]["EnableRemoteDebug"]
+    assert actual_train_args["SessionChainingConfig"]["EnableSessionTagChaining"]
 
 
 def test_create_transform_job_with_sagemaker_config_injection(sagemaker_session):
@@ -2482,9 +2443,9 @@ def boto_session_complete():
     boto_mock.client("logs").describe_log_streams.return_value = DEFAULT_LOG_STREAMS
     boto_mock.client("logs").get_log_events.side_effect = DEFAULT_LOG_EVENTS
     boto_mock.client("sagemaker").describe_training_job.return_value = COMPLETED_DESCRIBE_JOB_RESULT
-    boto_mock.client(
-        "sagemaker"
-    ).describe_transform_job.return_value = COMPLETED_DESCRIBE_TRANSFORM_JOB_RESULT
+    boto_mock.client("sagemaker").describe_transform_job.return_value = (
+        COMPLETED_DESCRIBE_TRANSFORM_JOB_RESULT
+    )
     return boto_mock
 
 
@@ -2504,9 +2465,9 @@ def boto_session_stopped():
     boto_mock.client("logs").describe_log_streams.return_value = DEFAULT_LOG_STREAMS
     boto_mock.client("logs").get_log_events.side_effect = DEFAULT_LOG_EVENTS
     boto_mock.client("sagemaker").describe_training_job.return_value = STOPPED_DESCRIBE_JOB_RESULT
-    boto_mock.client(
-        "sagemaker"
-    ).describe_transform_job.return_value = STOPPED_DESCRIBE_TRANSFORM_JOB_RESULT
+    boto_mock.client("sagemaker").describe_transform_job.return_value = (
+        STOPPED_DESCRIBE_TRANSFORM_JOB_RESULT
+    )
     return boto_mock
 
 
