@@ -568,11 +568,12 @@ def test_clarify_model_monitor():
 
     # The subclass should has monitoring_type() defined
     # noinspection PyAbstractClass
-    class DummyClarifyModelMonitoir(ClarifyModelMonitor):
+    class DummyClarifyModelMonitor(ClarifyModelMonitor):
+        _TEST_CLASS = True
         pass
 
     with pytest.raises(TypeError):
-        DummyClarifyModelMonitoir.monitoring_type()
+        DummyClarifyModelMonitor.monitoring_type()
 
 
 def test_clarify_model_monitor_invalid_update(clarify_model_monitors):
@@ -593,6 +594,8 @@ def test_clarify_model_monitor_invalid_attach(sagemaker_session):
     )
     # attach, invalid monitoring type
     for clarify_model_monitor_cls in ClarifyModelMonitor.__subclasses__():
+        if hasattr(clarify_model_monitor_cls, "_TEST_CLASS"):
+            continue
         with pytest.raises(TypeError):
             clarify_model_monitor_cls.attach(SCHEDULE_NAME, sagemaker_session)
 
@@ -1104,9 +1107,9 @@ def _test_model_bias_monitor_update_schedule(model_bias_monitor, sagemaker_sessi
     assert model_bias_monitor.max_runtime_in_seconds == MAX_RUNTIME_IN_SECONDS
     assert model_bias_monitor.env == ENVIRONMENT
     assert model_bias_monitor.network_config == NETWORK_CONFIG
-    expected_arguments[
-        "RoleArn"
-    ] = NEW_ROLE_ARN  # all but role arn are from existing job definition
+    expected_arguments["RoleArn"] = (
+        NEW_ROLE_ARN  # all but role arn are from existing job definition
+    )
     sagemaker_session.sagemaker_client.create_model_bias_job_definition.assert_called_once_with(
         **expected_arguments
     )
@@ -1627,9 +1630,9 @@ def _test_model_explainability_monitor_update_schedule(
     assert model_explainability_monitor.max_runtime_in_seconds == MAX_RUNTIME_IN_SECONDS
     assert model_explainability_monitor.env == ENVIRONMENT
     assert model_explainability_monitor.network_config == NETWORK_CONFIG
-    expected_arguments[
-        "RoleArn"
-    ] = NEW_ROLE_ARN  # all but role arn are from existing job definition
+    expected_arguments["RoleArn"] = (
+        NEW_ROLE_ARN  # all but role arn are from existing job definition
+    )
     sagemaker_session.sagemaker_client.create_model_explainability_job_definition.assert_called_once_with(
         **expected_arguments
     )

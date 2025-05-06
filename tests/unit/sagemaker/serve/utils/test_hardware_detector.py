@@ -21,7 +21,7 @@ from sagemaker.serve.utils import hardware_detector
 REGION = "us-west-2"
 VALID_INSTANCE_TYPE = "ml.g5.48xlarge"
 INVALID_INSTANCE_TYPE = "fl.c5.57xxlarge"
-EXPECTED_INSTANCE_GPU_INFO = (8, 196608)
+EXPECTED_INSTANCE_GPU_INFO = (8, 183104)
 MIB_CONVERSION_FACTOR = 0.00000095367431640625
 MEMORY_BUFFER_MULTIPLIER = 1.2  # 20% buffer
 
@@ -39,7 +39,7 @@ def test_get_gpu_info_success(sagemaker_session, boto_session):
                             "MemoryInfo": {"SizeInMiB": 24576},
                         }
                     ],
-                    "TotalGpuMemoryInMiB": 196608,
+                    "TotalGpuMemoryInMiB": 183104,
                 },
             }
         ]
@@ -101,8 +101,8 @@ def test_format_instance_type_without_ml_success():
     assert formatted_instance_type == "g5.48xlarge"
 
 
-@patch("sagemaker.serve.utils.hardware_detector.estimate_command_parser")
-@patch("sagemaker.serve.utils.hardware_detector.gather_data")
+@patch("accelerate.commands.estimate.estimate_command_parser")
+@patch("accelerate.commands.estimate.gather_data")
 def test_total_inference_model_size_mib(
     mock_gather_data,
     mock_parser,
@@ -118,5 +118,9 @@ def test_total_inference_model_size_mib(
     mock_parser.return_value = Mock()
     mock_gather_data.return_value = None
 
+    with pytest.raises(ValueError):
+        hardware_detector._total_inference_model_size_mib("stable-diffusion", "float32")
+
+    mock_parser.side_effect = ImportError
     with pytest.raises(ValueError):
         hardware_detector._total_inference_model_size_mib("stable-diffusion", "float32")

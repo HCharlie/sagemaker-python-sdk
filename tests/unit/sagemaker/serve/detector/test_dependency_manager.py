@@ -21,7 +21,7 @@ from sagemaker.serve.detector.dependency_manager import _parse_dependency_list, 
 
 DEPENDENCY_LIST = [
     "requests==2.26.0",
-    "numpy>=1.20.0",
+    "numpy==1.26.4",
     "pandas<=1.3.3",
     "matplotlib<3.5.0",
     "scikit-learn>0.24.1",
@@ -34,7 +34,7 @@ DEPENDENCY_LIST = [
 
 EXPECTED_DEPENDENCY_MAP = {
     "requests": "==2.26.0",
-    "numpy": ">=1.20.0",
+    "numpy": "==1.26.4",
     "pandas": "<=1.3.3",
     "matplotlib": "<3.5.0",
     "scikit-learn": ">0.24.1",
@@ -99,7 +99,7 @@ class DepedencyManagerTest(unittest.TestCase):
             call("custom_module==1.2.3\n"),
             call("numpy==4.5\n"),
             call("boto3=1.28.*\n"),
-            call("sagemaker>=2.199\n"),
+            call("sagemaker[huggingface]>=2.199\n"),
             call("other_module@http://some/website.whl\n"),
         ]
         mocked_writes.assert_has_calls(expected_calls)

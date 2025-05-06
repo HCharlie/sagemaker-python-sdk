@@ -1,10 +1,13 @@
 """Holds mixin logic to support deployment of Model ID"""
+
 from __future__ import absolute_import
+
 import logging
 from time import perf_counter
 import collections
 from multiprocessing.pool import ThreadPool
 from math import ceil
+from typing import Callable
 import pandas as pd
 from numpy import percentile, std
 from sagemaker.serve.model_server.djl_serving.utils import _tokens_from_chars, _tokens_from_words
@@ -31,8 +34,8 @@ def _pretty_print_results(results: dict):
 
     for key, value in ordered.items():
         avg_latencies.append(key)
-        tensor_parallel_degrees.append(value[0]["option.tensor_parallel_degree"])
-        dtypes.append(value[0]["option.dtype"])
+        tensor_parallel_degrees.append(value[0]["TENSOR_PARALLEL_DEGREE"])
+        dtypes.append(value[0]["OPTION_DTYPE"])
         p90s.append(value[1])
         avg_tokens_per_seconds.append(value[2])
         throughput_per_seconds.append(value[3])
@@ -98,13 +101,59 @@ def _pretty_print_results_tgi(results: dict):
     )
 
 
+def _pretty_print_results_jumpstart(results: dict, model_env_vars=None):
+    """Pretty prints benchmark results"""
+    if model_env_vars is None:
+        model_env_vars = []
+
+    __env_var_data = {}
+    for model_env_var in model_env_vars:
+        __env_var_data[model_env_var] = []
+
+    avg_latencies = []
+    p90s = []
+    avg_tokens_per_seconds = []
+    throughput_per_seconds = []
+    standard_deviations = []
+    ordered = collections.OrderedDict(sorted(results.items()))
+
+    for key, value in ordered.items():
+        avg_latencies.append(key)
+        p90s.append(value[1])
+        avg_tokens_per_seconds.append(value[2])
+        throughput_per_seconds.append(value[3])
+        standard_deviations.append(value[4])
+
+        for model_env_var in __env_var_data:
+            __env_var_data[model_env_var].append(value[0][model_env_var])
+
+    df = pd.DataFrame(
+        {
+            "AverageLatency (Serial)": avg_latencies,
+            "P90_Latency (Serial)": p90s,
+            "AverageTokensPerSecond (Serial)": avg_tokens_per_seconds,
+            "ThroughputPerSecond (Concurrent)": throughput_per_seconds,
+            "StandardDeviationResponse (Concurrent)": standard_deviations,
+            **__env_var_data,
+        }
+    )
+
+    logger.info(
+        "\n================================================================== Benchmark "
+        "Results ==================================================================\n%s"
+        "\n============================================================================"
+        "===========================================================================\n",
+        df.to_string(),
+    )
+
+
 def _tokens_per_second(generated_text: str, max_token_length: int, latency: float) -> int:
     """Placeholder docstring"""
     est_tokens = (_tokens_from_chars(generated_text) + _tokens_from_words(generated_text)) / 2
     return min(est_tokens, max_token_length) / latency
 
 
-def _timed_invoke(predict: callable, sample_input: object) -> tuple:
+def _timed_invoke(predict: Callable, sample_input: object) -> tuple:
     """Placeholder docstring"""
     start_timer = perf_counter()
     response = predict(sample_input)
@@ -216,3 +265,24 @@ def _more_performant(best_tuned_configuration: list, tuned_configuration: list) 
             return True
         return False
     return tuned_avg_latency <= best_avg_latency
+
+
+def _sharded_supported(model_id: str, config_dict: dict) -> bool:
+    """Check if sharded is supported for this ``Model``"""
+    model_type = config_dict.get("model_type", None)
+
+    if model_type is None:
+        return False
+
+    if model_id.startswith("facebook/galactica"):
+        return True
+
+    if model_type in ["bloom", "mpt", "ssm", "gpt_neox", "phi", "phi-msft", "opt", "t5"]:
+        return True
+
+    if model_type in ["RefinedWeb", "RefinedWebModel", "falcon"] and not config_dict.get(
+        "alibi", False
+    ):
+        return True
+
+    return False

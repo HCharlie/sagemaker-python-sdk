@@ -527,7 +527,8 @@ def test_one_step_ingestion_pipeline(
 
     temp_flow_path = "./ingestion.flow"
     with cleanup_feature_group(feature_group):
-        json.dump(ingestion_only_flow, open(temp_flow_path, "w"))
+        with open(temp_flow_path, "w") as f:
+            json.dump(ingestion_only_flow, f)
 
         data_wrangler_processor = DataWranglerProcessor(
             role=role,
@@ -1121,8 +1122,8 @@ def test_model_registration_with_tuning_model(
         entry_point=entry_point,
         source_dir=base_dir,
         role=role,
-        framework_version="1.10",
-        py_version="py38",
+        framework_version="1.13.1",
+        py_version="py39",
         instance_count=instance_count,
         instance_type=instance_type,
         sagemaker_session=pipeline_session,
@@ -1158,8 +1159,8 @@ def test_model_registration_with_tuning_model(
         ),
         entry_point=entry_point,
         source_dir=base_dir,
-        framework_version="1.10",
-        py_version="py38",
+        framework_version="1.13.1",
+        py_version="py39",
         sagemaker_session=pipeline_session,
     )
     step_model_regis_args = model.register(

@@ -18,21 +18,20 @@ import importlib
 import inspect
 import json
 import logging
-
 from enum import Enum
-from typing import Union, Dict, Optional, List, Set
+from typing import Dict, List, Optional, Set, Union
 
 import sagemaker
 from sagemaker.amazon.amazon_estimator import (
-    RecordSet,
     AmazonAlgorithmEstimatorBase,
     FileSystemRecordSet,
+    RecordSet,
 )
 from sagemaker.amazon.hyperparameter import Hyperparameter as hp  # noqa
 from sagemaker.analytics import HyperparameterTuningJobAnalytics
 from sagemaker.deprecations import removed_function
-from sagemaker.estimator import Framework, EstimatorBase
-from sagemaker.inputs import TrainingInput, FileSystemInput
+from sagemaker.estimator import EstimatorBase, Framework
+from sagemaker.inputs import FileSystemInput, TrainingInput
 from sagemaker.job import _Job
 from sagemaker.jumpstart.utils import (
     add_jumpstart_uri_tags,
@@ -44,18 +43,17 @@ from sagemaker.parameter import (
     IntegerParameter,
     ParameterRange,
 )
-from sagemaker.workflow.entities import PipelineVariable
-from sagemaker.workflow.pipeline_context import runnable_by_pipeline
-
 from sagemaker.session import Session
 from sagemaker.utils import (
+    Tags,
     base_from_name,
     base_name_from_image,
+    format_tags,
     name_from_base,
     to_string,
-    format_tags,
-    Tags,
 )
+from sagemaker.workflow.entities import PipelineVariable
+from sagemaker.workflow.pipeline_context import runnable_by_pipeline
 
 AMAZON_ESTIMATOR_MODULE = "sagemaker"
 AMAZON_ESTIMATOR_CLS_NAMES = {
@@ -133,15 +131,12 @@ class WarmStartConfig(object):
 
         if warm_start_type not in list(WarmStartTypes):
             raise ValueError(
-                "Invalid type: {}, valid warm start types are: {}".format(
-                    warm_start_type, list(WarmStartTypes)
-                )
+                f"Invalid type: {warm_start_type}, "
+                f"valid warm start types are: {list(WarmStartTypes)}"
             )
 
         if not parents:
-            raise ValueError(
-                "Invalid parents: {}, parents should not be None/empty".format(parents)
-            )
+            raise ValueError(f"Invalid parents: {parents}, parents should not be None/empty")
 
         self.type = warm_start_type
         self.parents = set(parents)
@@ -568,9 +563,9 @@ class TuningJobCompletionCriteriaConfig(object):
             ] = self.max_number_of_training_jobs_not_improving
 
         if self.target_objective_metric_value is not None:
-            completion_criteria_config[
-                TARGET_OBJECTIVE_METRIC_VALUE
-            ] = self.target_objective_metric_value
+            completion_criteria_config[TARGET_OBJECTIVE_METRIC_VALUE] = (
+                self.target_objective_metric_value
+            )
 
         if self.complete_on_convergence is not None:
             completion_criteria_config[CONVERGENCE_DETECTED] = {}
@@ -867,9 +862,11 @@ class HyperparameterTuner(object):
                 estimator_name: self._prepare_static_hyperparameters(
                     estimator,
                     self._hyperparameter_ranges_dict[estimator_name],
-                    include_cls_metadata.get(estimator_name, False)
-                    if isinstance(include_cls_metadata, dict)
-                    else include_cls_metadata,
+                    (
+                        include_cls_metadata.get(estimator_name, False)
+                        if isinstance(include_cls_metadata, dict)
+                        else include_cls_metadata
+                    ),
                 )
                 for (estimator_name, estimator) in self.estimator_dict.items()
             }
@@ -887,9 +884,11 @@ class HyperparameterTuner(object):
             static_auto_parameters_dict = {
                 estimator_name: self._prepare_auto_parameters(
                     self.static_hyperparameters_dict[estimator_name],
-                    self.hyperparameters_to_keep_static_dict.get(estimator_name, None)
-                    if self.hyperparameters_to_keep_static_dict
-                    else None,
+                    (
+                        self.hyperparameters_to_keep_static_dict.get(estimator_name, None)
+                        if self.hyperparameters_to_keep_static_dict
+                        else None
+                    ),
                 )
                 for estimator_name in sorted(self.estimator_dict.keys())
             }
@@ -1268,10 +1267,10 @@ class HyperparameterTuner(object):
             objective_metric_name_dict[estimator_name] = training_details["TuningObjective"][
                 "MetricName"
             ]
-            hyperparameter_ranges_dict[
-                estimator_name
-            ] = cls._prepare_parameter_ranges_from_job_description(  # noqa: E501 # pylint: disable=line-too-long
-                training_details["HyperParameterRanges"]
+            hyperparameter_ranges_dict[estimator_name] = (
+                cls._prepare_parameter_ranges_from_job_description(  # noqa: E501 # pylint: disable=line-too-long
+                    training_details["HyperParameterRanges"]
+                )
             )
 
             metric_definitions = training_details["AlgorithmSpecification"].get(
@@ -1451,9 +1450,7 @@ class HyperparameterTuner(object):
             return tuning_job_describe_result["BestTrainingJob"]
         except KeyError:
             raise Exception(
-                "Best training job not available for tuning job: {}".format(
-                    self.latest_tuning_job.name
-                )
+                f"Best training job not available for tuning job: {self.latest_tuning_job.name}"
             )
 
     def _ensure_last_tuning_job(self):
@@ -1916,8 +1913,11 @@ class HyperparameterTuner(object):
                 :meth:`~sagemaker.tuner.HyperparameterTuner.fit` method launches.
                 If not specified, a default job name is generated,
                 based on the training image name and current timestamp.
-            strategy (str): Strategy to be used for hyperparameter estimations
-                (default: 'Bayesian').
+            strategy (str or PipelineVariable): Strategy to be used for hyperparameter estimations.
+                More information about different strategies:
+                https://docs.aws.amazon.com/sagemaker/latest/dg/automatic-model-tuning-how-it-works.html.
+                Available options are: 'Bayesian', 'Random', 'Hyperband',
+                'Grid' (default: 'Bayesian')
             strategy_config (dict): The configuration for a training job launched by a
                 hyperparameter tuning job.
             completion_criteria_config (dict): The configuration for tuning job completion criteria.
@@ -2076,21 +2076,19 @@ class HyperparameterTuner(object):
             return
 
         if not isinstance(value, dict):
-            raise ValueError(
-                "Argument '{}' must be a dictionary using {} as keys".format(name, allowed_keys)
-            )
+            raise ValueError(f"Argument '{name}' must be a dictionary using {allowed_keys} as keys")
 
         value_keys = sorted(value.keys())
 
         if require_same_keys:
             if value_keys != allowed_keys:
                 raise ValueError(
-                    "The keys of argument '{}' must be the same as {}".format(name, allowed_keys)
+                    f"The keys of argument '{name}' must be the same as {allowed_keys}"
                 )
         else:
             if not set(value_keys).issubset(set(allowed_keys)):
                 raise ValueError(
-                    "The keys of argument '{}' must be a subset of {}".format(name, allowed_keys)
+                    f"The keys of argument '{name}' must be a subset of {allowed_keys}"
                 )
 
     def _add_estimator(
@@ -2111,9 +2109,9 @@ class HyperparameterTuner(object):
         self.objective_metric_name_dict[estimator_name] = objective_metric_name
         self._hyperparameter_ranges_dict[estimator_name] = hyperparameter_ranges
         if hyperparameters_to_keep_static is not None:
-            self.hyperparameters_to_keep_static_dict[
-                estimator_name
-            ] = hyperparameters_to_keep_static
+            self.hyperparameters_to_keep_static_dict[estimator_name] = (
+                hyperparameters_to_keep_static
+            )
         if metric_definitions is not None:
             self.metric_definitions_dict[estimator_name] = metric_definitions
 
@@ -2190,9 +2188,9 @@ class _TuningJob(_Job):
             tuning_config["auto_parameters"] = tuner.auto_parameters
 
         if tuner.completion_criteria_config is not None:
-            tuning_config[
-                "completion_criteria_config"
-            ] = tuner.completion_criteria_config.to_input_req()
+            tuning_config["completion_criteria_config"] = (
+                tuner.completion_criteria_config.to_input_req()
+            )
 
         tuner_args = {
             "job_name": tuner._current_job_name,
@@ -2222,12 +2220,16 @@ class _TuningJob(_Job):
                     tuner.objective_type,
                     tuner.objective_metric_name_dict[estimator_name],
                     tuner.hyperparameter_ranges_dict()[estimator_name],
-                    tuner.instance_configs_dict.get(estimator_name, None)
-                    if tuner.instance_configs_dict is not None
-                    else None,
-                    tuner.auto_parameters_dict.get(estimator_name, None)
-                    if tuner.auto_parameters_dict is not None
-                    else None,
+                    (
+                        tuner.instance_configs_dict.get(estimator_name, None)
+                        if tuner.instance_configs_dict is not None
+                        else None
+                    ),
+                    (
+                        tuner.auto_parameters_dict.get(estimator_name, None)
+                        if tuner.auto_parameters_dict is not None
+                        else None
+                    ),
                 )
                 for estimator_name in sorted(tuner.estimator_dict.keys())
             ]
@@ -2303,9 +2305,9 @@ class _TuningJob(_Job):
             training_config["image_uri"] = estimator.training_image_uri()
 
         training_config["enable_network_isolation"] = estimator.enable_network_isolation()
-        training_config[
-            "encrypt_inter_container_traffic"
-        ] = estimator.encrypt_inter_container_traffic
+        training_config["encrypt_inter_container_traffic"] = (
+            estimator.encrypt_inter_container_traffic
+        )
 
         training_config["use_spot_instances"] = estimator.use_spot_instances
         training_config["checkpoint_s3_uri"] = estimator.checkpoint_s3_uri

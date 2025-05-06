@@ -427,7 +427,7 @@ class DatasetBuilder:
         if isinstance(self._base, pd.DataFrame):
             temp_id = utils.unique_name_from_base("dataframe-base")
             local_file_name = f"{temp_id}.csv"
-            desired_s3_folder = f"{self._output_path}/{temp_id}"
+            desired_s3_folder = os.path.join(self._output_path, temp_id)
             self._base.to_csv(local_file_name, index=False, header=False)
             s3.S3Uploader.upload(
                 local_path=local_file_name,
@@ -929,7 +929,7 @@ class DatasetBuilder:
                 selected_features += ", "
                 selected_features += ", ".join(
                     [
-                        f'fg_{i}."{feature_name}" as "{feature_name}.{(i+1)}"'
+                        f'fg_{i}."{feature_name}" as "{feature_name}.{(i + 1)}"'
                         for feature_name in feature_group.projected_feature_names
                     ]
                 )

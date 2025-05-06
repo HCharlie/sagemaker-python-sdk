@@ -23,6 +23,7 @@ import json
 import numpy as np
 from six import with_metaclass
 
+from sagemaker.serializer_utils import read_records
 from sagemaker.utils import DeferredError
 
 try:
@@ -196,14 +197,14 @@ class NumpyDeserializer(SimpleBaseDeserializer):
     single array.
     """
 
-    def __init__(self, dtype=None, accept="application/x-npy", allow_pickle=True):
+    def __init__(self, dtype=None, accept="application/x-npy", allow_pickle=False):
         """Initialize a ``NumpyDeserializer`` instance.
 
         Args:
             dtype (str): The dtype of the data (default: None).
             accept (union[str, tuple[str]]): The MIME type (or tuple of allowable MIME types) that
                 is expected from the inference endpoint (default: "application/x-npy").
-            allow_pickle (bool): Allow loading pickled object arrays (default: True).
+            allow_pickle (bool): Allow loading pickled object arrays (default: False).
         """
         super(NumpyDeserializer, self).__init__(accept=accept)
         self.dtype = dtype
@@ -227,10 +228,21 @@ class NumpyDeserializer(SimpleBaseDeserializer):
             if content_type == "application/json":
                 return np.array(json.load(codecs.getreader("utf-8")(stream)), dtype=self.dtype)
             if content_type == "application/x-npy":
-                return np.load(io.BytesIO(stream.read()), allow_pickle=self.allow_pickle)
+                try:
+                    return np.load(io.BytesIO(stream.read()), allow_pickle=self.allow_pickle)
+                except ValueError as ve:
+                    raise ValueError(
+                        "Please set the param allow_pickle=True \
+                        to deserialize pickle objects in NumpyDeserializer"
+                    ).with_traceback(ve.__traceback__)
             if content_type == "application/x-npz":
                 try:
                     return np.load(io.BytesIO(stream.read()), allow_pickle=self.allow_pickle)
+                except ValueError as ve:
+                    raise ValueError(
+                        "Please set the param allow_pickle=True \
+                        to deserialize pickle objectsin NumpyDeserializer"
+                    ).with_traceback(ve.__traceback__)
                 finally:
                     stream.close()
         finally:
@@ -377,3 +389,31 @@ class TorchTensorDeserializer(SimpleBaseDeserializer):
                 "Unable to deserialize your data to torch.Tensor.\
                     Please provide custom deserializer in InferenceSpec."
             )
+
+
+class RecordDeserializer(SimpleBaseDeserializer):
+    """Deserialize RecordIO Protobuf data from an inference endpoint."""
+
+    def __init__(self, accept="application/x-recordio-protobuf"):
+        """Initialize a ``RecordDeserializer`` instance.
+
+        Args:
+            accept (union[str, tuple[str]]): The MIME type (or tuple of allowable MIME types) that
+                is expected from the inference endpoint (default:
+                "application/x-recordio-protobuf").
+        """
+        super(RecordDeserializer, self).__init__(accept=accept)
+
+    def deserialize(self, data, content_type):
+        """Deserialize RecordIO Protobuf data from an inference endpoint.
+
+        Args:
+            data (object): The protobuf message to deserialize.
+            content_type (str): The MIME type of the data.
+        Returns:
+            list: A list of records.
+        """
+        try:
+            return read_records(data)
+        finally:
+            data.close()

@@ -73,6 +73,7 @@ CHISQUARED_METHOD = "ChiSquared"
 LINFINITY_METHOD = "LInfinity"
 
 CRON_DAILY = CronExpressionGenerator.daily()
+CRON_NOW = CronExpressionGenerator.now()
 BASELINING_JOB_NAME = "baselining-job"
 BASELINE_DATASET_PATH = "/my/local/path/baseline.csv"
 PREPROCESSOR_PATH = "/my/local/path/preprocessor.py"
@@ -1136,6 +1137,36 @@ def _test_data_quality_monitor_update_schedule(data_quality_monitor, sagemaker_s
     sagemaker_session.sagemaker_client.delete_data_quality_job_definition.assert_not_called()
     sagemaker_session.sagemaker_client.create_data_quality_job_definition.assert_not_called()
 
+    # update schedule
+    sagemaker_session.describe_monitoring_schedule = MagicMock()
+    sagemaker_session.sagemaker_client.describe_data_quality_job_definition = MagicMock()
+    sagemaker_session.sagemaker_client.create_data_quality_job_definition = MagicMock()
+
+    # Test updating monitoring schedule with schedule_cron_expression set to NOW
+    sagemaker_session.sagemaker_client.update_monitoring_schedule = Mock()
+    data_quality_monitor.update_monitoring_schedule(
+        data_analysis_start_time="-PT24H",
+        data_analysis_end_time="-PT0H",
+        schedule_cron_expression=CRON_NOW,
+    )
+
+    sagemaker_session.sagemaker_client.update_monitoring_schedule.assert_called_once_with(
+        MonitoringScheduleName=data_quality_monitor.monitoring_schedule_name,
+        MonitoringScheduleConfig={
+            "MonitoringJobDefinitionName": data_quality_monitor.job_definition_name,
+            "MonitoringType": DefaultModelMonitor.monitoring_type(),
+            "ScheduleConfig": {
+                "ScheduleExpression": CRON_NOW,
+                "DataAnalysisStartTime": "-PT24H",
+                "DataAnalysisEndTime": "-PT0H",
+            },
+        },
+    )
+
+    # A new data quality job definition should be created
+    sagemaker_session.sagemaker_client.describe_data_quality_job_definition.assert_called_once()
+    sagemaker_session.sagemaker_client.create_data_quality_job_definition.assert_called_once()
+
     # update one property of job definition
     time.sleep(
         0.001
@@ -1164,9 +1195,9 @@ def _test_data_quality_monitor_update_schedule(data_quality_monitor, sagemaker_s
     assert data_quality_monitor.max_runtime_in_seconds == MAX_RUNTIME_IN_SECONDS
     assert data_quality_monitor.env == ENVIRONMENT
     assert data_quality_monitor.network_config == NETWORK_CONFIG
-    expected_arguments[
-        "RoleArn"
-    ] = NEW_ROLE_ARN  # all but role arn are from existing job definition
+    expected_arguments["RoleArn"] = (
+        NEW_ROLE_ARN  # all but role arn are from existing job definition
+    )
     sagemaker_session.sagemaker_client.create_data_quality_job_definition.assert_called_once_with(
         **expected_arguments
     )
@@ -1786,9 +1817,9 @@ def _test_model_quality_monitor_update_schedule(model_quality_monitor, sagemaker
     assert model_quality_monitor.max_runtime_in_seconds == MAX_RUNTIME_IN_SECONDS
     assert model_quality_monitor.env == ENVIRONMENT
     assert model_quality_monitor.network_config == NETWORK_CONFIG
-    expected_arguments[
-        "RoleArn"
-    ] = NEW_ROLE_ARN  # all but role arn are from existing job definition
+    expected_arguments["RoleArn"] = (
+        NEW_ROLE_ARN  # all but role arn are from existing job definition
+    )
     sagemaker_session.sagemaker_client.create_model_quality_job_definition.assert_called_once_with(
         **expected_arguments
     )

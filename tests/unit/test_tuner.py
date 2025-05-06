@@ -46,7 +46,54 @@ from sagemaker.workflow.functions import JsonGet, Join
 from sagemaker.workflow.parameters import ParameterString, ParameterInteger
 
 from src.sagemaker.tuner import InstanceConfig
-from .tuner_test_utils import *  # noqa: F403
+from .tuner_test_utils import (
+    BASE_JOB_NAME,
+    BUCKET_NAME,
+    CategoricalParameter,
+    ContinuousParameter,
+    DATA_DIR,
+    EARLY_STOPPING_TYPE,
+    Estimator,
+    ESTIMATOR,
+    ESTIMATOR_NAME,
+    ESTIMATOR_NAME_TWO,
+    ESTIMATOR_TWO,
+    FRAMEWORK_VERSION,
+    HYPERPARAMETER_RANGES,
+    HYPERPARAMETER_RANGES_TWO,
+    IMAGE_NAME,
+    INPUTS,
+    INSTANCE_COUNT,
+    INSTANCE_TYPE,
+    IntegerParameter,
+    JOB_NAME,
+    LIST_TAGS_RESULT,
+    MAX_JOBS,
+    MAX_PARALLEL_JOBS,
+    METRIC_DEFINITIONS,
+    MODEL_DATA,
+    MULTI_ALGO_TUNING_JOB_DETAILS,
+    NUM_COMPONENTS,
+    OBJECTIVE_METRIC_NAME,
+    OBJECTIVE_METRIC_NAME_TWO,
+    OBJECTIVE_TYPE,
+    PCA,
+    PY_VERSION,
+    REGION,
+    ROLE,
+    SAGEMAKER_SESSION,
+    SCRIPT_NAME,
+    STRATEGY,
+    TAGS,
+    TRAINING_JOB_DESCRIPTION,
+    TRAINING_JOB_NAME,
+    TUNING_JOB_DETAILS,
+    WarmStartConfig,
+    WarmStartTypes,
+    WARM_START_CONFIG,
+    ENDPOINT_DESC,
+    ENDPOINT_CONFIG_DESC,
+)
 
 
 @pytest.fixture()
@@ -830,7 +877,7 @@ def _assert_parameter_ranges(expected, actual, is_framework_estimator):
     continuous_ranges = []
     integer_ranges = []
     categorical_ranges = []
-    for (name, param_range) in expected.items():
+    for name, param_range in expected.items():
         if isinstance(param_range, ContinuousParameter):
             continuous_ranges.append(param_range.as_tuning_range(name))
         elif isinstance(param_range, IntegerParameter):

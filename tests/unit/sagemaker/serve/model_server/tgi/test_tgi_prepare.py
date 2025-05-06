@@ -50,8 +50,8 @@ class TgiPrepareTests(TestCase):
         mock_disk_space.assert_called_once_with(mock_model_path)
         mock_disk_usage.assert_called_once()
 
-        self.assertEquals(ret_model_path, mock_model_path)
-        self.assertEquals(ret_code_dir, mock_code_dir)
+        self.assertEqual(ret_model_path, mock_model_path)
+        self.assertEqual(ret_code_dir, mock_code_dir)
 
     @patch("sagemaker.serve.model_server.tgi.prepare.Path")
     def test_create_dir_structure_invalid_path(self, mock_path):
@@ -63,10 +63,14 @@ class TgiPrepareTests(TestCase):
         with self.assertRaises(ValueError) as context:
             _create_dir_structure(mock_model_path)
 
-        self.assertEquals("model_dir is not a valid directory", str(context.exception))
+        self.assertEqual("model_dir is not a valid directory", str(context.exception))
 
     @patch("sagemaker.serve.model_server.tgi.prepare.S3Downloader")
-    def test_prepare_tgi_js_resources_for_jumpstart_uncompressed_str(self, mock_s3_downloader):
+    @patch("builtins.open", read_data="data")
+    @patch("json.load", return_value={})
+    def test_prepare_tgi_js_resources_for_jumpstart_uncompressed_str(
+        self, mock_json_load, mock_open, mock_s3_downloader
+    ):
         mock_code_dir = Mock()
         mock_s3_downloader_obj = Mock()
         mock_s3_downloader.return_value = mock_s3_downloader_obj
@@ -80,7 +84,11 @@ class TgiPrepareTests(TestCase):
         )
 
     @patch("sagemaker.serve.model_server.tgi.prepare.S3Downloader")
-    def test_prepare_tgi_js_resources_for_jumpstart_invalid_model_data(self, mock_s3_downloader):
+    @patch("builtins.open", read_data="data")
+    @patch("json.load", return_value={})
+    def test_prepare_tgi_js_resources_for_jumpstart_invalid_model_data(
+        self, mock_json_load, mock_open, mock_s3_downloader
+    ):
         mock_code_dir = Mock()
         mock_s3_downloader_obj = Mock()
         mock_s3_downloader.return_value = mock_s3_downloader_obj
@@ -108,8 +116,12 @@ class TgiPrepareTests(TestCase):
     @patch("sagemaker.serve.model_server.tgi.prepare.S3Downloader")
     @patch("sagemaker.serve.model_server.tgi.prepare._tmpdir")
     @patch("sagemaker.serve.model_server.tgi.prepare._extract_js_resource")
+    @patch("builtins.open", read_data="data")
+    @patch("json.load", return_value={})
     def test_prepare_tgi_js_resources_for_jumpstart_compressed_str(
         self,
+        mock_open,
+        mock_json_load,
         mock_extract_js_resource,
         mock_tmpdir,
         mock_s3_downloader,
